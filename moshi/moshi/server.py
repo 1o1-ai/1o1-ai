@@ -483,7 +483,7 @@ def main():
         logger.info(f"serving static content from {static_path}")
         app.router.add_get("/", handle_root)
         app.router.add_static(
-            "/", path=static_path, follow_symlinks=True, name="static"
+            "/", path=static_path, follow_symlinks=False, name="static"
         )
     protocol = "http"
     ssl_context = None
