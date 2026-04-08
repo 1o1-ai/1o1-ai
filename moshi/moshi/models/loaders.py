@@ -163,6 +163,53 @@ def get_mimi(filename: str | Path,
     return model
 
 
+def _patch_state_dict(
+    state_dict: dict,
+    model_sd: dict,
+    copy_missing_weights: bool,
+) -> dict:
+    """Apply weight patches common to all loading paths.
+
+    1. Expand depformer self_attn weights if shapes mismatch.
+    2. Fill missing keys by copying 0..7 -> 8..15 for certain groups.
+    """
+    # Patch 1: expand depformer self_attn weights if needed
+    for name, tensor in list(state_dict.items()):
+        if "depformer" in name and "self_attn" in name and name in model_sd:
+            if tensor.shape != model_sd[name].shape:
+                print("Expanding %s", name)
+                missing = (
+                    tensor
+                    if copy_missing_weights
+                    else model_sd[name][tensor.shape[0]:]
+                )
+                state_dict[name] = torch.concat([tensor, missing], dim=0)
+
+    # Patch 2: fill missing keys by copying 0..7 -> 8..15 for certain groups
+    if copy_missing_weights:
+        to_replace = ["gating", "linears", "depformer_in", "depformer_emb"]
+        for name in model_sd.keys():
+            if name in state_dict:
+                continue
+            replaced = False
+            for old, new in zip(range(8), range(8, 16)):
+                for rep in to_replace:
+                    needle = f"{rep}.{new}."
+                    if needle in name:
+                        src = name.replace(needle, f"{rep}.{old}.")
+                        if src in state_dict:
+                            print("Replacing %s <- %s", name, src)
+                            state_dict[name] = state_dict[src]
+                            replaced = True
+                        break
+                if replaced:
+                    break
+            if not replaced:
+                print("Missing %s", name)
+
+    return state_dict
+
+
 def get_moshi_lm(
     filename: str | Path | None,
     copy_missing_weights: bool = True,
@@ -170,6 +217,7 @@ def get_moshi_lm(
     dtype: torch.dtype = torch.bfloat16,
     delays=None,
     cpu_offload: bool = False,
+    multi_gpu: bool = False,
 ) -> LMModel:
     """Return a pretrained Moshi LM model.
 
@@ -181,12 +229,20 @@ def get_moshi_lm(
         delays: Optional custom delays configuration.
         cpu_offload: If True, offload model layers to CPU when GPU memory is
                      insufficient. Uses accelerate's device_map="auto".
+        multi_gpu: If True, distribute model layers across all available CUDA
+                   GPUs using accelerate's device_map="auto". Requires
+                   'accelerate' package and multiple CUDA devices.
     """
     # Copy to avoid mutating a shared/global dict
     lm_kwargs = dict(_lm_kwargs)
     lm_kwargs["dep_q"] = 16
     if delays is not None:
         lm_kwargs["delays"] = delays
+
+    if multi_gpu and filename is not None:
+        return _get_moshi_lm_multi_gpu(
+            filename, copy_missing_weights, device, dtype, lm_kwargs
+        )
 
     if cpu_offload and filename is not None:
         return _get_moshi_lm_with_offload(
@@ -215,40 +271,9 @@ def get_moshi_lm(
         # torch checkpoint
         with open(filename, "rb") as f:
             state_dict = torch.load(f, map_location="cpu")
-    # Patch 1: expand depformer self_attn weights if needed
-    model_sd = model.state_dict()
-    for name, tensor in list(state_dict.items()):
-        if "depformer" in name and "self_attn" in name and name in model_sd:
-            if tensor.shape != model_sd[name].shape:
-                print("Expanding %s", name)
-                missing = (
-                    tensor
-                    if copy_missing_weights
-                    else model_sd[name][tensor.shape[0] :]
-                )
-                state_dict[name] = torch.concat([tensor, missing], dim=0)
 
-    # Patch 2: fill missing keys by copying 0..7 -> 8..15 for certain groups
-    if copy_missing_weights:
-        to_replace = ["gating", "linears", "depformer_in", "depformer_emb"]
-        for name in model_sd.keys():
-            if name in state_dict:
-                continue
-            replaced = False
-            for old, new in zip(range(8), range(8, 16)):
-                for rep in to_replace:
-                    needle = f"{rep}.{new}."
-                    if needle in name:
-                        src = name.replace(needle, f"{rep}.{old}.")
-                        if src in state_dict:
-                            print("Replacing %s <- %s", name, src)
-                            state_dict[name] = state_dict[src]
-                            replaced = True
-                        break
-                if replaced:
-                    break
-            if not replaced:
-                print("Missing %s", name)
+    model_sd = model.state_dict()
+    state_dict = _patch_state_dict(state_dict, model_sd, copy_missing_weights)
 
     # Assign weights to target device
     dev = torch.device(device) if isinstance(device, str) else device
@@ -294,39 +319,9 @@ def _get_moshi_lm_with_offload(
         with open(filename, "rb") as f:
             state_dict = torch.load(f, map_location="cpu")
 
-    # Apply weight patches (same as non-offload path)
+    # Apply weight patches
     model_sd = model.state_dict()
-    for name, tensor in list(state_dict.items()):
-        if "depformer" in name and "self_attn" in name and name in model_sd:
-            if tensor.shape != model_sd[name].shape:
-                logger.info(f"Expanding {name}")
-                missing = (
-                    tensor
-                    if copy_missing_weights
-                    else model_sd[name][tensor.shape[0]:]
-                )
-                state_dict[name] = torch.concat([tensor, missing], dim=0)
-
-    if copy_missing_weights:
-        to_replace = ["gating", "linears", "depformer_in", "depformer_emb"]
-        for name in model_sd.keys():
-            if name in state_dict:
-                continue
-            replaced = False
-            for old, new in zip(range(8), range(8, 16)):
-                for rep in to_replace:
-                    needle = f"{rep}.{new}."
-                    if needle in name:
-                        src = name.replace(needle, f"{rep}.{old}.")
-                        if src in state_dict:
-                            logger.info(f"Replacing {name} <- {src}")
-                            state_dict[name] = state_dict[src]
-                            replaced = True
-                        break
-                if replaced:
-                    break
-            if not replaced:
-                logger.warning(f"Missing {name}")
+    state_dict = _patch_state_dict(state_dict, model_sd, copy_missing_weights)
 
     model.load_state_dict(state_dict, strict=False, assign=True)
 
@@ -359,6 +354,112 @@ def _get_moshi_lm_with_offload(
         device_map=device_map,
         offload_dir="offload_weights",  # Directory for disk offload if needed
     )
+
+    model.eval()
+    return model
+
+
+def _get_moshi_lm_multi_gpu(
+    filename: str | Path,
+    copy_missing_weights: bool,
+    device: torch.device | str,
+    dtype: torch.dtype,
+    lm_kwargs: dict,
+) -> LMModel:
+    """Load Moshi LM distributed across multiple GPUs using accelerate.
+
+    This function splits model layers across all available CUDA GPUs
+    using accelerate's ``infer_auto_device_map`` and ``dispatch_model``.
+    Tensors are automatically moved between devices during forward pass.
+
+    Note:
+        CUDA graphs are automatically disabled when using multi-GPU dispatch
+        because model parameters reside on different devices.
+    """
+    try:
+        from accelerate import infer_auto_device_map, dispatch_model
+    except ImportError:
+        raise ImportError(
+            "Multi-GPU support requires the 'accelerate' package. "
+            "Install it with: pip install accelerate"
+        )
+
+    num_gpus = torch.cuda.device_count()
+    if num_gpus < 2:
+        logger.warning(
+            f"Multi-GPU requested but only {num_gpus} CUDA device(s) found. "
+            "Falling back to single-device loading."
+        )
+        # Fall back to standard single-GPU loading
+        from . import loaders as _self_module
+        return get_moshi_lm(
+            filename,
+            copy_missing_weights=copy_missing_weights,
+            device=device,
+            dtype=dtype,
+            delays=lm_kwargs.get("delays"),
+            cpu_offload=False,
+            multi_gpu=False,
+        )
+
+    filename = str(filename)
+    logger.info(f"Loading model with multi-GPU support across {num_gpus} devices")
+
+    # Create model on CPU to get the architecture
+    model = LMModel(device="cpu", dtype=dtype, **lm_kwargs)
+
+    # Load state_dict to CPU
+    if filename.endswith(".safetensors"):
+        state_dict = load_file(filename, device="cpu")
+    else:
+        with open(filename, "rb") as f:
+            state_dict = torch.load(f, map_location="cpu")
+
+    # Apply weight patches
+    model_sd = model.state_dict()
+    state_dict = _patch_state_dict(state_dict, model_sd, copy_missing_weights)
+
+    model.load_state_dict(state_dict, strict=False, assign=True)
+
+    # Build max_memory dict for all available GPUs (no CPU fallback by default)
+    max_memory = {}
+    for i in range(num_gpus):
+        # Use most of GPU memory, leaving a small buffer for runtime overhead
+        total_mem = torch.cuda.get_device_properties(i).total_mem
+        # Reserve ~500MB for runtime overhead per GPU
+        usable = max(total_mem - 500 * 1024 * 1024, int(total_mem * 0.9))
+        max_memory[i] = usable
+    # Allow CPU as last resort fallback so the model can still load
+    # if the combined GPU memory is not quite enough
+    max_memory["cpu"] = "32GiB"
+
+    logger.info(f"Max memory config: { {k: (f'{v / 1e9:.1f}GB' if isinstance(v, (int, float)) else v) for k, v in max_memory.items()} }")
+
+    # Infer device map based on available GPU memory across all devices
+    device_map = infer_auto_device_map(
+        model,
+        max_memory=max_memory,
+        no_split_module_classes=["StreamingTransformerLayer"],
+        dtype=dtype,
+    )
+
+    # Log the device distribution
+    device_counts = {}
+    for v in device_map.values():
+        key = str(v)
+        device_counts[key] = device_counts.get(key, 0) + 1
+    logger.info(f"Device map distribution: {device_counts}")
+
+    # Dispatch model across devices
+    model = dispatch_model(
+        model,
+        device_map=device_map,
+    )
+
+    # Disable CUDA graphs globally since parameters are on different devices
+    import os
+    os.environ["NO_CUDA_GRAPH"] = "1"
+    logger.info("CUDA graphs disabled for multi-GPU execution")
 
     model.eval()
     return model
