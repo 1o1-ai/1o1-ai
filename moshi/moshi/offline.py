@@ -169,6 +169,7 @@ def run_inference(
     greedy: bool,
     save_voice_prompt_embeddings: bool,
     cpu_offload: bool = False,
+    multi_gpu: bool = False,
 ):
     """Run offline inference using an input WAV as the user-side stream.
 
@@ -203,7 +204,12 @@ def run_inference(
     log("info", "loading moshi")
     if moshi_weight is None:
         moshi_weight = hf_hub_download(hf_repo, loaders.MOSHI_NAME)  # type: ignore
-    lm = loaders.get_moshi_lm(moshi_weight, device=device, cpu_offload=cpu_offload)
+    lm = loaders.get_moshi_lm(
+        moshi_weight,
+        device=device,
+        cpu_offload=cpu_offload,
+        multi_gpu=multi_gpu,
+    )
     lm.eval()
     log("info", "moshi loaded")
 
@@ -380,6 +386,10 @@ def main():
     parser.add_argument("--cpu-offload", action="store_true",
                         help="Offload LM model layers to CPU when GPU memory is insufficient. "
                              "Requires 'accelerate' package.")
+    parser.add_argument("--multi-gpu", action="store_true",
+                        help="Distribute the LM model across all available CUDA GPUs. "
+                             "Requires 'accelerate' package and multiple CUDA devices. "
+                             "CUDA graphs are automatically disabled in this mode.")
     parser.add_argument("--seed", type=int, default=-1, help="Seed for reproducibility (-1 disables)")
 
     args = parser.parse_args()
@@ -424,6 +434,7 @@ def main():
             greedy=greedy,
             save_voice_prompt_embeddings=False,
             cpu_offload=args.cpu_offload,
+            multi_gpu=args.multi_gpu,
         )
 
 

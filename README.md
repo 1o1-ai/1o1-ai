@@ -58,6 +58,13 @@ SSL_DIR=$(mktemp -d); python -m moshi.server --ssl "$SSL_DIR"
 SSL_DIR=$(mktemp -d); python -m moshi.server --ssl "$SSL_DIR" --cpu-offload
 ```
 
+**Multi-GPU:** If you have multiple GPUs but each one individually lacks sufficient memory, use the `--multi-gpu` flag to distribute the LM model across all available CUDA devices. This requires the `accelerate` package (`pip install accelerate`):
+```bash
+SSL_DIR=$(mktemp -d); python -m moshi.server --ssl "$SSL_DIR" --multi-gpu
+```
+
+> **Note:** Multi-GPU mode automatically disables CUDA graphs since model parameters reside on different devices. This may result in slightly higher latency compared to single-GPU execution, but enables running the model on GPUs that individually have insufficient memory (e.g., 2× 16GB GPUs instead of 1× 32GB GPU). The Mimi encoder/decoder models remain on the primary GPU (`--device` flag, default `cuda:0`).
+
 Access the Web UI from a browser at `localhost:8998` if running locally, otherwise look for the access link printed by the script:
 ```
 Access the Web UI directly at https://11.54.401.33:8998
@@ -67,7 +74,7 @@ Access the Web UI directly at https://11.54.401.33:8998
 
 For offline evaluation use the offline script that streams in an input wav file and produces an output wav file from the captured output stream. The output file will be the same duration as the input file.
 
-Add `--cpu-offload` to any command below if your GPU has insufficient memory (requires `accelerate` package). Or install cpu-only PyTorch for offline evaluation on pure CPU.
+Add `--cpu-offload` to any command below if your GPU has insufficient memory (requires `accelerate` package). Add `--multi-gpu` to distribute across multiple GPUs. Or install cpu-only PyTorch for offline evaluation on pure CPU.
 
 **Assistant example:**
 ```bash
@@ -88,6 +95,18 @@ python -m moshi.offline \
   --text-prompt "$(cat assets/test/prompt_service.txt)" \
   --input-wav "assets/test/input_service.wav" \
   --seed 42424242 \
+  --output-wav "output.wav" \
+  --output-text "output.json"
+```
+
+**Multi-GPU example:**
+```bash
+HF_TOKEN=<TOKEN> \
+python -m moshi.offline \
+  --voice-prompt "NATF2.pt" \
+  --input-wav "assets/test/input_assistant.wav" \
+  --seed 42424242 \
+  --multi-gpu \
   --output-wav "output.wav" \
   --output-text "output.json"
 ```

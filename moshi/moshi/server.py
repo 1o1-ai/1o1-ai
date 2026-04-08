@@ -373,6 +373,10 @@ def main():
     parser.add_argument("--cpu-offload", action="store_true",
                         help="Offload LM model layers to CPU when GPU memory is insufficient. "
                              "Requires 'accelerate' package.")
+    parser.add_argument("--multi-gpu", action="store_true",
+                        help="Distribute the LM model across all available CUDA GPUs. "
+                             "Requires 'accelerate' package and multiple CUDA devices. "
+                             "CUDA graphs are automatically disabled in this mode.")
     parser.add_argument(
         "--voice-prompt-dir",
         type=str,
@@ -442,7 +446,12 @@ def main():
     logger.info("loading moshi")
     if args.moshi_weight is None:
         args.moshi_weight = hf_hub_download(args.hf_repo, loaders.MOSHI_NAME)
-    lm = loaders.get_moshi_lm(args.moshi_weight, device=args.device, cpu_offload=args.cpu_offload)
+    lm = loaders.get_moshi_lm(
+        args.moshi_weight,
+        device=args.device,
+        cpu_offload=args.cpu_offload,
+        multi_gpu=args.multi_gpu,
+    )
     lm.eval()
     logger.info("moshi loaded")
     state = ServerState(
@@ -470,14 +479,11 @@ def main():
     protocol = "http"
     ssl_context = None
     if args.ssl is not None:
-        ssl_context, protocol = create_ssl_context(args.ssl)
-    host_ip = args.host if args.host not in ("0.0.0.0", "::", "localhost") else get_lan_ip()
-    logger.info(f"Access the Web UI directly at {protocol}://{host_ip}:{args.port}")
+        ssl_context = create_ssl_context(args.ssl)
+        protocol = "https"
+    lan_ip = get_lan_ip()
+    logger.info(f"Access the Web UI directly at {protocol}://{lan_ip}:{args.port}")
     if setup_tunnel is not None:
         tunnel = setup_tunnel('localhost', args.port, tunnel_token, None)
-        logger.info(f"Tunnel started, if executing on a remote GPU, you can use {tunnel}.")
-    web.run_app(app, port=args.port, ssl_context=ssl_context)
-
-
-with torch.no_grad():
-    main()
+        logger.info(f"Tunnel started, access at {tunnel}")
+    web.run_app(app, host=args.host, port=args.port, ssl_context=ssl_context)
