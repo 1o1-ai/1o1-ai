@@ -5,9 +5,9 @@ Frontend for the demo.
 ## Run the client
 
 - Node is required, I recommend using [NVM](https://github.com/nvm-sh/nvm) to help you manage your node version and make sure you're on the recommended version for this project. If you do so run `nvm use`.
-- Generate a public/private key pair, `cert.pem` and `key.pem` and copy it to the at the root of this package
+- Generate a public/private key pair, `cert.pem` and `key.pem` and copy it to the root of this package
 - Create an env.local file and add your an entry for `VITE_QUEUE_API_PATH` (default should be `/api`)
-- Before running the project for the time or after dependencies update use `npm install`
+- Before running the project for the first time or after dependencies update use `npm install`
 - To run the project use `npm run dev`
 - To build the project use `npm run build`
 
