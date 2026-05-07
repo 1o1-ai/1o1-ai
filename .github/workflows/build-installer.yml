@@ -1,0 +1,48 @@
+name: Build 1o1-ai Windows Installer
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'installer/**'
+  release:
+    types: [created]
+  workflow_dispatch:
+
+jobs:
+  build-installer:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install NSIS
+        run: choco install nsis -y
+
+      - name: Download NSIS plugins
+        run: |
+          mkdir -p "$env:ProgramFiles(x86)\NSIS\Plugins\x86-unicode"
+          Invoke-WebRequest -Uri "https://nsis.sourceforge.io/mediawiki/images/c/c9/Inetc.zip" -OutFile inetc.zip
+          Expand-Archive inetc.zip -DestinationPath inetc_tmp
+          Copy-Item inetc_tmp\Plugins\x86-unicode\INetC.dll "$env:ProgramFiles(x86)\NSIS\Plugins\x86-unicode\"
+
+      - name: Build installer
+        run: makensis installer\setup.nsi
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: 1o1-ai-windows-installer
+          path: installer\1o1-ai-setup.exe
+          retention-days: 30
+
+      - name: Upload to Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: installer\1o1-ai-setup.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
