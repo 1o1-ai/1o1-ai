@@ -21,16 +21,30 @@ jobs:
 
       - name: Install NSIS
         run: choco install nsis -y
+        shell: powershell
 
-      - name: Download NSIS plugins
+      - name: Verify NSIS installation
         run: |
-          mkdir -p "$env:ProgramFiles(x86)\NSIS\Plugins\x86-unicode"
-          Invoke-WebRequest -Uri "https://nsis.sourceforge.io/mediawiki/images/c/c9/Inetc.zip" -OutFile inetc.zip
-          Expand-Archive inetc.zip -DestinationPath inetc_tmp
-          Copy-Item inetc_tmp\Plugins\x86-unicode\INetC.dll "$env:ProgramFiles(x86)\NSIS\Plugins\x86-unicode\"
+          $nsisPath = "C:\Program Files (x86)\NSIS\makensis.exe"
+          if (Test-Path $nsisPath) {
+            Write-Host "NSIS found at: $nsisPath"
+            & $nsisPath /VERSION
+          } else {
+            Write-Host "Searching for makensis..."
+            Get-ChildItem -Path "C:\" -Recurse -Filter "makensis.exe" -ErrorAction SilentlyContinue | Select-Object FullName
+          }
+        shell: powershell
 
-      - name: Build installer
-        run: makensis installer\setup.nsi
+      - name: Build installer with full NSIS path
+        run: |
+          $makensis = "C:\Program Files (x86)\NSIS\makensis.exe"
+          if (-not (Test-Path $makensis)) {
+            $makensis = (Get-ChildItem -Path "C:\" -Recurse -Filter "makensis.exe" -ErrorAction SilentlyContinue | Select-Object -First 1).FullName
+          }
+          Write-Host "Using makensis at: $makensis"
+          & $makensis installer\setup.nsi
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        shell: powershell
 
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
