@@ -19,7 +19,7 @@ CERT   = BASE / "server.crt"
 KEY    = BASE / "server.key"
 CONFIG = BASE / "config.json"
 
-config = json.loads(CONFIG.read_text()) if CONFIG.exists() else {}
+config = json.loads(CONFIG.read_text(encoding="utf-8-sig")) if CONFIG.exists() else {}
 HOST   = config.get("host", "localhost")
 PORT   = int(config.get("port", 8998))
 
