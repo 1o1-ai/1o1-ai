@@ -50,9 +50,19 @@ C:\Program Files\1o1-ai\installer\start-1o1.bat
 
 ### 3. Open the Live Demo
 
+**On first use, trust the local certificate (one-time step):**
+
+👉 Open **[https://localhost:8998/](https://localhost:8998/)** in your browser.  
+Click **"Advanced" → "Proceed to localhost (unsafe)"** to accept the self-signed certificate.  
+You will see a confirmation page — the server is now trusted.
+
+Then open the demo:
+
 👉 **[yogabrata.com/demo.html](https://yogabrata.com/demo.html)**
 
 The demo auto-connects to `wss://localhost:8998`. Click the mic button and start talking!
+
+> **Note:** You only need to trust the certificate once per browser. If you see "Connection error" in the demo, make sure you completed the certificate trust step above.
 
 ---
 

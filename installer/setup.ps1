@@ -64,8 +64,9 @@ Log "INFO" "Core dependencies installed."
 # --- SSL cert (PEM files for uvicorn) ---
 Log "INFO" "Generating self-signed SSL certificate (server.crt / server.key)..."
 & $pyExe -c @"
+import ipaddress
 from cryptography import x509
-from cryptography.x509.oid import NameOID
+from cryptography.x509.oid import NameOID, ExtendedKeyUsageOID
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from datetime import datetime, timedelta, timezone
@@ -86,7 +87,27 @@ cert = (x509.CertificateBuilder()
     .serial_number(x509.random_serial_number())
     .not_valid_before(datetime.now(timezone.utc))
     .not_valid_after(datetime.now(timezone.utc) + timedelta(days=1825))
-    .add_extension(x509.SubjectAlternativeName([x509.DNSName(u'localhost')]), critical=False)
+    .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
+    .add_extension(
+        x509.KeyUsage(
+            digital_signature=True, key_encipherment=True,
+            content_commitment=False, data_encipherment=False,
+            key_agreement=False, key_cert_sign=False,
+            crl_sign=False, encipher_only=False, decipher_only=False,
+        ),
+        critical=True,
+    )
+    .add_extension(
+        x509.ExtendedKeyUsage([ExtendedKeyUsageOID.SERVER_AUTH]),
+        critical=False,
+    )
+    .add_extension(
+        x509.SubjectAlternativeName([
+            x509.DNSName(u'localhost'),
+            x509.IPAddress(ipaddress.IPv4Address(u'127.0.0.1')),
+        ]),
+        critical=False,
+    )
     .sign(key, hashes.SHA256()))
 
 with open(key_path, 'wb') as f:
@@ -98,12 +119,27 @@ print('SSL cert written: server.crt + server.key')
 Log "INFO" "SSL certs generated."
 
 # Trust cert in Windows (for browser to accept wss://localhost)
+$certTrusted = $false
+$certObj = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2((Join-Path $InstallDir "server.crt"))
 try {
-    $certObj = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2((Join-Path $InstallDir "server.crt"))
     $store = New-Object System.Security.Cryptography.X509Certificates.X509Store("Root","LocalMachine")
     $store.Open("ReadWrite"); $store.Add($certObj); $store.Close()
     Log "INFO" "Certificate trusted in LocalMachine\Root (wss:// will work in browsers)."
-} catch { Log "WARN" "Could not auto-trust cert: $_ -- run as Admin or add server.crt manually." }
+    $certTrusted = $true
+} catch { Log "WARN" "LocalMachine\Root trust failed (requires Admin): $_" }
+
+if (-not $certTrusted) {
+    try {
+        $store = New-Object System.Security.Cryptography.X509Certificates.X509Store("Root","CurrentUser")
+        $store.Open("ReadWrite"); $store.Add($certObj); $store.Close()
+        Log "INFO" "Certificate trusted in CurrentUser\Root."
+        $certTrusted = $true
+    } catch { Log "WARN" "CurrentUser\Root trust also failed: $_" }
+}
+
+if (-not $certTrusted) {
+    Log "WARN" "Could not auto-trust cert. Before using the demo, open https://localhost:8998/ in your browser and click 'Advanced' -> 'Proceed to localhost' to trust the certificate."
+}
 
 # --- Model weights (optional, requires HuggingFace token) ---
 if ($HfToken) {

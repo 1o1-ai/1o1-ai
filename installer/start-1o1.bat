@@ -30,7 +30,15 @@ IF NOT EXIST "%MAIN_PY%" (
 )
 
 echo [INFO] Starting 1o1 AI server...
-echo [INFO] Open https://yogabrata.com/demo.html in your browser.
+echo.
+echo  *** FIRST-TIME SETUP (required once per browser) ***
+echo  1. After the server starts, open this URL in your browser:
+echo        https://localhost:8998/
+echo     Click "Advanced" then "Proceed to localhost" to trust the certificate.
+echo  2. Once the page shows "Server is running", open the demo:
+echo        https://yogabrata.com/demo.html
+echo  *** You only need to do step 1 once per browser. ***
+echo.
 echo [INFO] Press Ctrl+C to stop.
 echo.
 
