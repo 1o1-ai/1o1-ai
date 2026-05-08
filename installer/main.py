@@ -6,6 +6,7 @@ import asyncio, json, logging, os
 from pathlib import Path
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.responses import HTMLResponse
 
 logging.basicConfig(
     level=logging.INFO,
@@ -23,7 +24,38 @@ config = json.loads(CONFIG.read_text(encoding="utf-8-sig")) if CONFIG.exists() e
 HOST   = config.get("host", "localhost")
 PORT   = int(config.get("port", 8998))
 
+_TRUST_PAGE = """<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>1o1 AI Server — Certificate Trust</title>
+<style>
+  body { font-family: Arial, sans-serif; max-width: 640px; margin: 60px auto; padding: 0 20px; }
+  h1   { color: #1a1a1a; }
+  .ok  { color: green; font-weight: bold; }
+  ol   { line-height: 2; }
+  a    { color: #0066cc; }
+</style>
+</head>
+<body>
+<h1>&#x2705; 1o1 AI Server is running</h1>
+<p class="ok">The server is up on port {port}. Your browser has accepted the certificate.</p>
+<p>You can now use the demo:</p>
+<p><a href="https://yogabrata.com/demo.html" target="_blank">&#x1F3AE; Open yogabrata.com/demo.html</a></p>
+<hr>
+<h2>If you still see &ldquo;Connection error&rdquo; in the demo</h2>
+<ol>
+  <li>Make sure this server is running (you are reading this, so it is &#x2713;).</li>
+  <li>Reload <a href="https://yogabrata.com/demo.html" target="_blank">yogabrata.com/demo.html</a> in the same browser window you used to visit this page.</li>
+  <li>If the problem persists, try a different browser (Chrome is recommended).</li>
+</ol>
+</body>
+</html>
+""".replace("{port}", str(PORT))
+
 app = FastAPI(title="1o1 AI Server")
+
+@app.get("/", response_class=HTMLResponse)
+def root():
+    return _TRUST_PAGE
 
 @app.get("/health")
 def health():
@@ -94,8 +126,13 @@ if __name__ == "__main__":
     log.info("  1o1 AI Server  |  ManjuLAB")
     log.info(f"  Listening: {proto}://{HOST}:{PORT}")
     log.info(f"  Demo UI:   https://yogabrata.com/demo.html")
-    if not ssl_ok:
+    if ssl_ok:
+        log.info(f"  STEP 1 — Open https://{HOST}:{PORT}/ in your browser")
+        log.info(f"           and click 'Advanced' -> 'Proceed' to trust the cert.")
+        log.info(f"  STEP 2 — Then open https://yogabrata.com/demo.html")
+    else:
         log.warning("  SSL certs missing — re-run setup.ps1 to fix")
+        log.warning("  Without SSL the demo cannot connect from yogabrata.com")
     log.info("=" * 52)
 
     uvicorn.run(
