@@ -120,8 +120,8 @@ Log "INFO" "SSL certs generated."
 
 # Trust cert in Windows (for browser to accept wss://localhost)
 $certTrusted = $false
+$certObj = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2((Join-Path $InstallDir "server.crt"))
 try {
-    $certObj = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2((Join-Path $InstallDir "server.crt"))
     $store = New-Object System.Security.Cryptography.X509Certificates.X509Store("Root","LocalMachine")
     $store.Open("ReadWrite"); $store.Add($certObj); $store.Close()
     Log "INFO" "Certificate trusted in LocalMachine\Root (wss:// will work in browsers)."
@@ -130,7 +130,6 @@ try {
 
 if (-not $certTrusted) {
     try {
-        $certObj = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2((Join-Path $InstallDir "server.crt"))
         $store = New-Object System.Security.Cryptography.X509Certificates.X509Store("Root","CurrentUser")
         $store.Open("ReadWrite"); $store.Add($certObj); $store.Close()
         Log "INFO" "Certificate trusted in CurrentUser\Root."

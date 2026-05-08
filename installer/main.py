@@ -28,28 +28,30 @@ _TRUST_PAGE = """<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="utf-8"><title>1o1 AI Server — Certificate Trust</title>
 <style>
-  body { font-family: Arial, sans-serif; max-width: 640px; margin: 60px auto; padding: 0 20px; }
-  h1   { color: #1a1a1a; }
-  .ok  { color: green; font-weight: bold; }
-  ol   { line-height: 2; }
-  a    { color: #0066cc; }
+  body {{ font-family: Arial, sans-serif; max-width: 640px; margin: 60px auto; padding: 0 20px; }}
+  h1   {{ color: #1a1a1a; }}
+  .ok  {{ color: green; font-weight: bold; }}
+  ol   {{ line-height: 2; }}
+  a    {{ color: #0066cc; }}
 </style>
 </head>
 <body>
-<h1>&#x2705; 1o1 AI Server is running</h1>
+<h1><span role="img" aria-label="Success">&#x2705;</span> 1o1 AI Server is running</h1>
 <p class="ok">The server is up on port {port}. Your browser has accepted the certificate.</p>
 <p>You can now use the demo:</p>
-<p><a href="https://yogabrata.com/demo.html" target="_blank">&#x1F3AE; Open yogabrata.com/demo.html</a></p>
+<p><a href="https://yogabrata.com/demo.html" target="_blank" rel="noopener noreferrer">
+  <span role="img" aria-label="Game controller">&#x1F3AE;</span> Open yogabrata.com/demo.html (opens in new tab)
+</a></p>
 <hr>
 <h2>If you still see &ldquo;Connection error&rdquo; in the demo</h2>
 <ol>
   <li>Make sure this server is running (you are reading this, so it is &#x2713;).</li>
-  <li>Reload <a href="https://yogabrata.com/demo.html" target="_blank">yogabrata.com/demo.html</a> in the same browser window you used to visit this page.</li>
+  <li>Reload <a href="https://yogabrata.com/demo.html" target="_blank" rel="noopener noreferrer">yogabrata.com/demo.html (opens in new tab)</a> in the same browser window you used to visit this page.</li>
   <li>If the problem persists, try a different browser (Chrome is recommended).</li>
 </ol>
 </body>
 </html>
-""".replace("{port}", str(PORT))
+""".format(port=PORT)
 
 app = FastAPI(title="1o1 AI Server")
 
