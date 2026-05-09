@@ -17,6 +17,7 @@ import React, {
   useRef,
   useState,
 } from "react";
+import * as XLSX from "xlsx";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -406,6 +407,30 @@ export const BomForm: FC<BomFormProps> = ({
     }
   };
 
+  // ── Export to Excel ───────────────────────────────────────────────
+  const handleExportToExcel = () => {
+    if (components.length === 0) {
+      setError("No components to export.");
+      return;
+    }
+    const exportData = components.map((c) => ({
+      Section: c.section,
+      Component: c.component,
+      Subcomponent: c.subcomponent ?? "",
+      Vendor: c.vendor ?? "",
+      Model: c.model ?? "",
+      Quantity: c.quantity,
+      "Unit Cost": c.unit_cost,
+      "Total Cost": c.total_cost ?? c.quantity * c.unit_cost,
+      Status: c.status,
+      Notes: c.notes ?? "",
+    }));
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "BoM");
+    XLSX.writeFile(workbook, "MANJULAB_Ohio_BOM.xlsx");
+  };
+
   // ── Vendor dropdown options ───────────────────────────────────────
   const vendorOptions = useMemo(() => {
     const hints = formData.component
@@ -439,9 +464,17 @@ export const BomForm: FC<BomFormProps> = ({
             Bill of Materials — PersonaPlex + LLM Brain + RAG (5 TPS)
           </p>
         </div>
-        <div className="ml-auto text-right">
-          <p className="text-xs text-gray-400">Grand Total</p>
-          <p className="text-xl font-bold text-indigo-700">{usd(grandTotal)}</p>
+        <div className="ml-auto flex items-center gap-6 text-right">
+          <button
+            onClick={handleExportToExcel}
+            className="rounded bg-indigo-100 px-4 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-200 transition-colors"
+          >
+            Export to Excel
+          </button>
+          <div>
+            <p className="text-xs text-gray-400">Grand Total</p>
+            <p className="text-xl font-bold text-indigo-700">{usd(grandTotal)}</p>
+          </div>
         </div>
       </header>
 
