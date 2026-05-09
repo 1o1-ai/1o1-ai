@@ -28,6 +28,7 @@ app.use("/api/components", componentsRouter);
 app.use("/api/vendors",    vendorsRouter);
 
 // GET /api/models?vendor=  (convenience alias for the frontend)
+// Note: this endpoint is covered by the global rate limiter applied above.
 app.get("/api/models", async (req, res) => {
   const { vendor } = req.query;
   if (!vendor) return res.status(400).json({ error: "vendor query param required" });

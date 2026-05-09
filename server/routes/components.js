@@ -166,16 +166,19 @@ router.put("/:id", async (req, res) => {
        WHERE id = $11
        RETURNING *`,
       [
-        section      ?? cur.section,
-        component    ?? cur.component,
-        subcomponent ?? cur.subcomponent,
-        vendor       ?? cur.vendor,
-        model        ?? cur.model,
+        // Use the request value if it was explicitly provided (even empty/null),
+        // otherwise fall back to the stored value. This allows callers to
+        // intentionally clear optional fields by sending null or "".
+        section      !== undefined ? section      : cur.section,
+        component    !== undefined ? component    : cur.component,
+        subcomponent !== undefined ? subcomponent : cur.subcomponent,
+        vendor       !== undefined ? vendor       : cur.vendor,
+        model        !== undefined ? model        : cur.model,
         specs        !== undefined ? JSON.stringify(specs) : cur.specs,
-        quantity     ?? cur.quantity,
-        unit_cost    ?? cur.unit_cost,
-        notes        ?? cur.notes,
-        status       ?? cur.status,
+        quantity     !== undefined ? quantity     : cur.quantity,
+        unit_cost    !== undefined ? unit_cost    : cur.unit_cost,
+        notes        !== undefined ? notes        : cur.notes,
+        status       !== undefined ? status       : cur.status,
         id,
       ]
     );
