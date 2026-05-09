@@ -1,12 +1,23 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
+const rateLimit = require("express-rate-limit");
 
 const componentsRouter = require("./routes/components");
 const vendorsRouter = require("./routes/vendors");
 
 const app = express();
 const PORT = process.env.PORT || 4000;
+
+// ── Global rate limiter (200 req/min per IP) ───────────────────────
+const globalLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests, please try again later." },
+});
+app.use(globalLimiter);
 
 // ── Middleware ────────────────────────────────────────────────────
 app.use(cors({ origin: process.env.CLIENT_ORIGIN || "http://localhost:5173" }));
@@ -16,7 +27,7 @@ app.use(express.json());
 app.use("/api/components", componentsRouter);
 app.use("/api/vendors",    vendorsRouter);
 
-// GET /api/models?vendor=  (convenience alias kept at root for the frontend)
+// GET /api/models?vendor=  (convenience alias for the frontend)
 app.get("/api/models", async (req, res) => {
   const { vendor } = req.query;
   if (!vendor) return res.status(400).json({ error: "vendor query param required" });

@@ -1,6 +1,17 @@
 const express = require("express");
+const rateLimit = require("express-rate-limit");
 const router = express.Router();
 const pool = require("../db");
+
+// Rate limiter shared by all component routes (100 req/min per IP)
+const limiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests, please try again later." },
+});
+router.use(limiter);
 
 // ------------------------------------------------------------------
 // GET /api/components  – list all components
@@ -87,6 +98,34 @@ router.post("/", async (req, res) => {
 });
 
 // ------------------------------------------------------------------
+// GET /api/components/summary  – section totals + grand total
+// NOTE: must be defined BEFORE /:id routes so Express doesn't treat
+//       the literal string "summary" as a dynamic id parameter.
+// ------------------------------------------------------------------
+router.get("/summary", async (_req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        section,
+        COUNT(*)                        AS component_count,
+        SUM(quantity)                   AS total_qty,
+        SUM(total_cost)                 AS section_total
+      FROM components
+      GROUP BY section
+      ORDER BY section
+    `);
+    const grand = result.rows.reduce(
+      (acc, r) => acc + parseFloat(r.section_total || 0),
+      0
+    );
+    res.json({ sections: result.rows, grand_total: grand });
+  } catch (err) {
+    console.error("GET /components/summary error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ------------------------------------------------------------------
 // PUT /api/components/:id  – update a component
 // ------------------------------------------------------------------
 router.put("/:id", async (req, res) => {
@@ -163,32 +202,6 @@ router.delete("/:id", async (req, res) => {
     res.json({ deleted: true, id: parseInt(id) });
   } catch (err) {
     console.error("DELETE /components/:id error:", err);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-// ------------------------------------------------------------------
-// GET /api/components/summary  – section totals + grand total
-// ------------------------------------------------------------------
-router.get("/summary", async (req, res) => {
-  try {
-    const result = await pool.query(`
-      SELECT
-        section,
-        COUNT(*)                        AS component_count,
-        SUM(quantity)                   AS total_qty,
-        SUM(total_cost)                 AS section_total
-      FROM components
-      GROUP BY section
-      ORDER BY section
-    `);
-    const grand = result.rows.reduce(
-      (acc, r) => acc + parseFloat(r.section_total || 0),
-      0
-    );
-    res.json({ sections: result.rows, grand_total: grand });
-  } catch (err) {
-    console.error("GET /components/summary error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });
